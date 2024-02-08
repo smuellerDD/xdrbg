@@ -32,6 +32,12 @@ static inline uint64_t rol(uint64_t x, int n)
 	return ((x << (n & (64 - 1))) | (x >> ((64 - n) & (64 - 1))));
 }
 
+static inline void memset_secure(void *s, int c, size_t n)
+{
+	memset(s, c, n);
+	__asm__ __volatile__("" : : "r" (s) : "memory");
+}
+
 /*********************************** Keccak ***********************************/
 /* state[x + y*5] */
 #define A(x, y) (x + 5 * y)
@@ -626,7 +632,7 @@ static int lc_xdrbg256_drng_generate(struct lc_xdrbg256_drng_state *state,
 	/* V is already in place. */
 
 	/* Clear the SHAKE state which is not needed any more. */
-	memset(&shake_ctx, 0, sizeof(shake_ctx));
+	memset_secure(&shake_ctx, 0, sizeof(shake_ctx));
 
 	return 0;
 }
@@ -678,7 +684,7 @@ static int lc_xdrbg256_drng_seed(struct lc_xdrbg256_drng_state *state,
 	lc_xdrbg256_shake_final(&shake_ctx, state->v, LC_XDRBG256_DRNG_KEYSIZE);
 
 	/* Clear the SHAKE state which is not needed any more. */
-	memset(&shake_ctx, 0, sizeof(shake_ctx));
+	memset_secure(&shake_ctx, 0, sizeof(shake_ctx));
 
 	return 0;
 }
@@ -777,8 +783,8 @@ static int xdrbg256_drng_selftest(struct lc_xdrbg256_drng_state *xdrbg256_ctx)
 	ret += lc_compare(compare1 + LC_XDRBG256_DRNG_KEYSIZE, exp1,
 			  sizeof(exp1), "SHAKE DRNG verification");
 
-	memset(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
-	memset(&xdrbg256_compare, 0, sizeof(xdrbg256_compare));
+	memset_secure(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
+	memset_secure(&xdrbg256_compare, 0, sizeof(xdrbg256_compare));
 
 	return ret;
 }
