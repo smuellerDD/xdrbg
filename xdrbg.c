@@ -747,7 +747,14 @@ static int xdrbg256_drng_selftest(struct lc_xdrbg256_drng_state *xdrbg256_ctx)
 		0x50, 0x1f, 0xc0, 0x48, 0x42, 0xb6, 0xea, 0x16, 0x4c, 0x50,
 		0x29, 0x12, 0xd0, 0x1c, 0x39, 0x9f, 0x79,
 	};
+	static const uint8_t exp83[] = {
+		0x39, 0x2b, 0x18, 0x96, 0x45, 0x81, 0x86, 0x84, 0xcf
+	};
+	static const uint8_t exp84[] = {
+		0xf0, 0x85, 0xd6, 0xc8, 0xd1, 0x76, 0xd7, 0x12, 0x39
+	};
 	uint8_t act1[sizeof(exp1)];
+	uint8_t act2[sizeof(exp83)];
 	uint8_t compare1[LC_XDRBG256_DRNG_KEYSIZE + sizeof(exp1)];
 	int ret = 0;
 	uint8_t encode;
@@ -784,6 +791,69 @@ static int xdrbg256_drng_selftest(struct lc_xdrbg256_drng_state *xdrbg256_ctx)
 			  sizeof(exp1), "SHAKE DRNG verification");
 
 	memset_secure(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
+
+	/*
+	 * Verify the generate operation with additional information of 83
+	 * bytes.
+	 */
+	lc_xdrbg256_drng_seed(xdrbg256_ctx, seed, sizeof(seed), NULL, 0);
+	lc_xdrbg256_drng_generate(xdrbg256_ctx, exp1, 83, act2, sizeof(act2));
+	ret += lc_compare(act2, exp83, sizeof(act2),
+			  "SHAKE DRNG with alpha 83 bytes");
+	memset(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
+
+	/*
+	 * Verify the generate operation with additional information of 84
+	 * bytes.
+	 */
+	lc_xdrbg256_drng_seed(xdrbg256_ctx, seed, sizeof(seed), NULL, 0);
+	lc_xdrbg256_drng_generate(xdrbg256_ctx, exp1, 84, act2, sizeof(act2));
+	ret += lc_compare(act2, exp84, sizeof(act2),
+			  "SHAKE DRNG with alpha 84 bytes");
+	memset(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
+
+	/*
+	 * Verify the generate operation with additional information of 85
+	 * bytes to be identical to 84 bytes due to the truncation of the
+	 * additional data.
+	 */
+	lc_xdrbg256_drng_seed(xdrbg256_ctx, seed, sizeof(seed), NULL, 0);
+	lc_xdrbg256_drng_generate(xdrbg256_ctx, exp1, 85, act2, sizeof(act2));
+	ret += lc_compare(act2, exp84, sizeof(act2),
+			  "SHAKE DRNG with alpha 85 bytes");
+	memset(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
+
+	/* Verify the generate operation with additional data */
+	shake_256_init(&xdrbg256_compare);
+
+	/* Verify: Seeding operation of the DRBG */
+	keccak_absorb(&xdrbg256_compare, seed, sizeof(seed));
+	encode = 0;
+	keccak_absorb(&xdrbg256_compare, &encode, sizeof(encode));
+
+	/* Verify: Now get the key for the next operation */
+	shake_set_digestsize(&xdrbg256_compare, LC_XDRBG256_DRNG_KEYSIZE);
+	keccak_squeeze(&xdrbg256_compare, compare1);
+
+	shake_256_init(&xdrbg256_compare);
+	/* Verify: Generate operation of the DRBG: Insert key */
+	keccak_absorb(&xdrbg256_compare, compare1, LC_XDRBG256_DRNG_KEYSIZE);
+	/* Verify: Generate operation of the DRBG: Insert alpha of 84 bytes */
+	keccak_absorb(&xdrbg256_compare, exp1, 84);
+
+	encode = 2 * 85 + 84;
+	/* Verify: Generate operation of the DRBG: n */
+	keccak_absorb(&xdrbg256_compare, &encode, sizeof(encode));
+
+	/* Verify: Generate operation of the DRBG: generate data */
+	shake_set_digestsize(&xdrbg256_compare,
+			     LC_XDRBG256_DRNG_KEYSIZE + sizeof(act2));
+	keccak_squeeze(&xdrbg256_compare, compare1);
+	ret += lc_compare(compare1 + LC_XDRBG256_DRNG_KEYSIZE, exp84,
+			  sizeof(exp84),
+			  "SHAKE DRNG with alpha 84 bytes verification");
+
+	memset(xdrbg256_ctx, 0, sizeof(*xdrbg256_ctx));
 	memset_secure(&xdrbg256_compare, 0, sizeof(xdrbg256_compare));
 
 	return ret;
