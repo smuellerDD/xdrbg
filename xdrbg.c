@@ -491,6 +491,7 @@ static void keccak_squeeze(struct lc_sha3_256_state *ctx, uint8_t *digest)
 /****************************** XDRBG Definitions *****************************/
 
 #define LC_XDRBG256_DRNG_KEYSIZE 64
+#define LC_XDRBG256_DRNG_ENCODE_N(x) (x * 85)
 
 struct lc_xdrbg256_drng_state {
 	uint8_t initially_seeded;
@@ -543,7 +544,7 @@ static void lc_xdrbg256_encode(struct lc_sha3_256_state *shake_ctx,
 		alphalen = 84;
 
 	/* Encode the length. */
-	encode = (uint8_t)((n * 85) + alphalen);
+	encode = (uint8_t)(n + alphalen);
 
 	/* Insert alpha and encode into the hash context. */
 	keccak_absorb(shake_ctx, alpha, alphalen);
@@ -580,7 +581,8 @@ static void lc_xdrbg256_drng_fke_init_ctx(struct lc_xdrbg256_drng_state *state,
 	keccak_absorb(shake_ctx, state->v, LC_XDRBG256_DRNG_KEYSIZE);
 
 	/* Insert alpha into the SHAKE state together with its encoding. */
-	lc_xdrbg256_encode(shake_ctx, 2, alpha, alphalen);
+	lc_xdrbg256_encode(shake_ctx, LC_XDRBG256_DRNG_ENCODE_N(2), alpha,
+			   alphalen);
 
 	/* Generate the V to store in the state and overwrite V'. */
 	lc_xdrbg256_shake_final(shake_ctx, state->v, LC_XDRBG256_DRNG_KEYSIZE);
@@ -678,7 +680,9 @@ static int lc_xdrbg256_drng_seed(struct lc_xdrbg256_drng_state *state,
 	keccak_absorb(&shake_ctx, seed, seedlen);
 
 	/* Insert alpha into the SHAKE state together with its encoding. */
-	lc_xdrbg256_encode(&shake_ctx, intially_seeded, alpha, alphalen);
+	lc_xdrbg256_encode(&shake_ctx,
+			   LC_XDRBG256_DRNG_ENCODE_N(intially_seeded), alpha,
+			   alphalen);
 
 	/* Generate the V to store in the state and overwrite V'. */
 	lc_xdrbg256_shake_final(&shake_ctx, state->v, LC_XDRBG256_DRNG_KEYSIZE);
